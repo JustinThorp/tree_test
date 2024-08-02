@@ -54,13 +54,23 @@ impl Node {
         }
     }
 
-    fn fit(&mut self, df: &mut Vec<&Data>, id: &mut i64, depth: usize) -> () {
+    fn fit(
+        &mut self,
+        df: &mut Vec<&Data>,
+        id: &mut i64,
+        depth: usize,
+        max_depth: usize,
+        min_samples_split: usize,
+    ) -> () {
         self.id = *id;
         self.depth = Some(depth);
         *id += 1;
         self.val = Some(df.iter().map(|x| x.y).sum::<f64>() / df.len() as f64);
-        if df.len() <= 9000 {
+        if df.len() <= min_samples_split {
             return ();
+        }
+        if self.depth.unwrap() >= max_depth {
+            return;
         }
         let mut opt_score: Option<f64> = None;
         for i in 0..3 {
@@ -68,6 +78,9 @@ impl Node {
 
             let mut left_sum = 0.0;
             let mut right_sum = df.iter().map(|x| x.y).sum::<f64>();
+
+            let mut left_sum_sq = 0.0;
+            let mut right_sum_sq = df.iter().map(|x| x.y.powi(2)).sum::<f64>();
             for j in 1..df.len() {
                 let left_count = j as f64;
                 let right_count = (df.len() - j) as f64;
@@ -75,20 +88,12 @@ impl Node {
                 left_sum += df[j - 1].y;
                 right_sum -= df[j - 1].y;
 
-                let left_mean = left_sum / left_count;
-                let right_mean = right_sum / right_count;
+                left_sum_sq += df[j - 1].y.powi(2);
+                right_sum_sq -= df[j - 1].y.powi(2);
 
-                let left_rss = df[..j]
-                    .iter()
-                    .map(|x| (x.y - left_mean).powi(2))
-                    .sum::<f64>();
-                let right_rss = df[j..]
-                    .iter()
-                    .map(|x| (x.y - right_mean).powi(2))
-                    .sum::<f64>();
+                let score = (right_sum_sq - right_sum.powi(2) / right_count)
+                    + (left_sum_sq - left_sum.powi(2) / left_count);
 
-                let score = left_rss + right_rss;
-                //let score = rss(&df[0..j]) + rss(&df[j..]);
                 if opt_score.is_none() {
                     self.var = Some(0);
                     opt_score = Some(score);
@@ -104,9 +109,15 @@ impl Node {
             .iter()
             .partition(|a| a.x[self.var.unwrap()] < self.split.unwrap());
         self.left = Some(Box::new(Node::new(self.id + 1, None, None)));
-        self.left.as_mut().unwrap().fit(&mut df1, id, depth + 1);
+        self.left
+            .as_mut()
+            .unwrap()
+            .fit(&mut df1, id, depth + 1, max_depth, min_samples_split);
         self.right = Some(Box::new(Node::new(self.id + 2, None, None)));
-        self.right.as_mut().unwrap().fit(&mut df2, id, depth + 1);
+        self.right
+            .as_mut()
+            .unwrap()
+            .fit(&mut df2, id, depth + 1, max_depth, min_samples_split);
     }
 
     fn predict(&self, x: Data) -> f64 {
@@ -125,35 +136,45 @@ impl Node {
     }
 }
 
-// fn mean(x: Vec<f64>) -> f64 {
-//     x.iter().sum::<f64>() / x.len() as f64
-// }
+struct Tree {
+    tree: Option<Node>,
+    max_depth: Option<usize>,
+    min_samples_split: Option<usize>,
+}
 
-// fn rss(x: &[&Data]) -> f64 {
-//     let mu: f64 = x.iter().map(|x| x.y).sum::<f64>() / x.len() as f64;
-//     x.iter().map(|a: &&Data| (a.y - mu).powi(2)).sum()
-// }
+impl Tree {
+    fn new(max_depth: Option<usize>, min_samples_split: Option<usize>) -> Tree {
+        Tree {
+            tree: None,
+            max_depth,
+            min_samples_split,
+        }
+    }
 
-// struct Tree {
-//     tree: Option<Node>,
-//     max_depth: Option<i64>,
-// }
+    fn fit(&mut self, df: Vec<Data>) -> () {
+        self.tree = Some(Node::new(1, None, None));
+        let mut id = 1;
+        let depth: usize = 0;
+        let mut df2: Vec<&Data> = df.iter().collect();
+        self.tree.as_mut().unwrap().fit(
+            &mut df2,
+            &mut id,
+            depth,
+            self.max_depth.unwrap(),
+            self.min_samples_split.unwrap(),
+        );
+    }
 
-// impl Tree {
-//     fn new() -> Tree {
-//         Tree {
-//             tree: None,
-//             max_depth: Some(2),
-//         }
-//     }
+    fn traverse(&self) -> () {
+        self.tree.as_ref().unwrap().traverse();
+    }
 
-//     fn fit(&mut self, df: Vec<Data>) -> () {
-//         ()
-//     }
-// }
+    fn predict(&self, x: Data) -> f64 {
+        self.tree.as_ref().unwrap().predict(x)
+    }
+}
 
 fn main() {
-    let mut tree = Node::new(1, None, None);
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .from_path("data.csv")
@@ -163,13 +184,10 @@ fn main() {
         let record: Data = result.unwrap();
         df.push(record)
     }
-    let mut id = 1;
-    let depth: usize = 0;
-    let mut df2: Vec<&Data> = df.iter().collect();
     let now = Instant::now();
-    tree.fit(&mut df2, &mut id, depth);
-    println!("{:?}", now.elapsed());
-    //println!("{:?}", tree);
+    let mut tree = Tree::new(Some(40), Some(10));
+    tree.fit(df);
     tree.traverse();
+    println!("{:?}", now.elapsed());
     println!("{}", tree.predict(Data::new(vec![-1.0, 1.7, 0.0], 1.0)));
 }
