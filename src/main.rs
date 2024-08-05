@@ -1,3 +1,4 @@
+use core::panic;
 // I think there is a slight difference in predictions since
 // I use unqiue values for splits and sklearn takes the midpoint between two points
 //Dont think it matters that much but may fix
@@ -57,19 +58,29 @@ impl Node {
         println!(
             "{:width$}, value : {:.3},split: {}",
             self.id,
-            self.val.unwrap(),
+            self.val.expect("This Should Always have a value"),
             self.split.unwrap_or(-1.0),
             width = (self.depth * 2) as usize
         );
-        if self.left.is_some() {
-            self.left.as_ref().unwrap().traverse();
-        }
-        if self.right.is_some() {
-            self.right.as_ref().unwrap().traverse();
-        }
+
+        match &self.left {
+            Some(x) => x.traverse(),
+            None => (),
+        };
+
+        match &self.right {
+            Some(x) => x.traverse(),
+            None => (),
+        };
     }
 
-    fn fit(&mut self, old_val: f64, df: &mut Vec<&Data>, id: &mut i64) -> () {
+    fn fit(
+        &mut self,
+        old_val: f64,
+        df: &mut Vec<&Data>,
+        id: &mut i64,
+        leaf_nodes: &mut usize,
+    ) -> () {
         self.id = *id;
         //self.depth = Some(depth);
         *id += 1;
@@ -77,9 +88,11 @@ impl Node {
             Some((df.iter().map(|x| x.y).sum::<f64>() / df.len() as f64) * 1.0 + 0.0 * old_val);
         // EXPNOTETNIAL SMOOTING IS HERE THATS WHY THE RESUKTS DONT MATHC
         if df.len() <= self.min_samples_split {
+            *leaf_nodes += 1;
             return ();
         }
         if self.depth >= self.max_depth {
+            *leaf_nodes += 1;
             return;
         }
         let mut opt_score: Option<f64> = None;
@@ -104,67 +117,78 @@ impl Node {
                 let score = (right_sum_sq - right_sum.powi(2) / right_count)
                     + (left_sum_sq - left_sum.powi(2) / left_count);
 
-                if opt_score.is_none() {
-                    if (j as usize > self.min_samples_leaf)
-                        && ((df.len() - j) as usize > self.min_samples_leaf)
-                    {
-                        self.var = Some(0);
-                        opt_score = Some(score);
-                        self.split = Some(df[j].x[i]);
+                match opt_score {
+                    Some(x) => {
+                        if (score < x)
+                            && (j as usize >= self.min_samples_leaf)
+                            && ((df.len() - j) as usize >= self.min_samples_leaf)
+                        {
+                            opt_score = Some(score);
+                            self.var = Some(i);
+                            self.split = Some((df[j].x[i] + df[j - 1].x[i]) / 2.0);
+                        }
                     }
-                } else if (score < opt_score.unwrap())
-                    && (j as usize > self.min_samples_leaf)
-                    && ((df.len() - j) as usize > self.min_samples_leaf)
-                {
-                    opt_score = Some(score);
-                    self.var = Some(i);
-                    self.split = Some((df[j].x[i] + df[j - 1].x[i]) / 2.0);
+                    None => {
+                        if (j as usize >= self.min_samples_leaf)
+                            && ((df.len() - j) as usize >= self.min_samples_leaf)
+                        {
+                            self.var = Some(0);
+                            opt_score = Some(score);
+                            self.split = Some(df[j].x[i]);
+                        }
+                    }
                 }
             }
         }
-        let (mut df1, mut df2): (Vec<_>, Vec<_>) = df
-            .iter()
-            .partition(|a| a.x[self.var.unwrap()] < self.split.unwrap());
-        self.left = Some(Box::new(Node::new(
-            self.id + 1,
-            self.depth + 1,
-            None,
-            None,
-            self.max_depth,
-            self.min_samples_split,
-            self.min_samples_leaf,
-        )));
-        self.left
-            .as_mut()
-            .unwrap()
-            .fit(self.val.unwrap(), &mut df1, id);
-        self.right = Some(Box::new(Node::new(
-            self.id + 2,
-            self.depth + 1,
-            None,
-            None,
-            self.max_depth,
-            self.min_samples_split,
-            self.min_samples_leaf,
-        )));
-        self.right
-            .as_mut()
-            .unwrap()
-            .fit(self.val.unwrap(), &mut df2, id);
+
+        match (self.val, self.var, self.split) {
+            (Some(val), Some(var), Some(split)) => {
+                let (mut df1, mut df2): (Vec<_>, Vec<_>) =
+                    df.iter().partition(|a| a.x[var] < split);
+                self.left = Some(Box::new(Node::new(
+                    self.id + 1,
+                    self.depth + 1,
+                    None,
+                    None,
+                    self.max_depth,
+                    self.min_samples_split,
+                    self.min_samples_leaf,
+                )));
+                self.left
+                    .as_mut()
+                    .expect("This was just assigned in the prev line")
+                    .fit(val, &mut df1, id, leaf_nodes);
+                self.right = Some(Box::new(Node::new(
+                    self.id + 2,
+                    self.depth + 1,
+                    None,
+                    None,
+                    self.max_depth,
+                    self.min_samples_split,
+                    self.min_samples_leaf,
+                )));
+                self.right
+                    .as_mut()
+                    .expect("This was just assigned in the prev line")
+                    .fit(val, &mut df2, id, leaf_nodes);
+            }
+            _ => {
+                *leaf_nodes += 1;
+            }
+        };
     }
 
     fn predict(&self, x: &Data) -> f64 {
-        match &self.right {
-            Some(_) => {
-                if (x.x[self.var.unwrap()] >= self.split.unwrap()) && (self.right.is_some()) {
-                    return self.right.as_ref().unwrap().predict(x);
-                } else if (x.x[self.var.unwrap()] < self.split.unwrap()) && (self.left.is_some()) {
-                    return self.left.as_ref().unwrap().predict(x);
+        match (&self.right, &self.left, self.val, self.var, self.split) {
+            (Some(r), Some(l), Some(_), Some(var), Some(split)) => {
+                if x.x[var] >= split {
+                    r.predict(x)
                 } else {
-                    return 5.0;
+                    l.predict(x)
                 }
             }
-            None => self.val.unwrap(),
+            (None, None, Some(val), None, None) => val,
+            _ => panic!("Unitialized Tree"),
         }
     }
 }
@@ -174,6 +198,7 @@ struct Tree {
     max_depth: Option<usize>,
     min_samples_split: Option<usize>,
     min_samples_leaf: Option<usize>,
+    leaf_nodes: usize,
 }
 
 impl Tree {
@@ -187,6 +212,7 @@ impl Tree {
             max_depth,
             min_samples_split,
             min_samples_leaf,
+            leaf_nodes: 0,
         }
     }
 
@@ -204,15 +230,24 @@ impl Tree {
         //let depth: usize = 0;
         let mut df2: Vec<&Data> = df.iter().collect();
         let val = df2.iter().map(|x| x.y).sum::<f64>() / df.len() as f64;
-        self.tree.as_mut().unwrap().fit(val, &mut df2, &mut id);
+        self.tree
+            .as_mut()
+            .expect("Was just assigned several lines ago")
+            .fit(val, &mut df2, &mut id, &mut self.leaf_nodes);
     }
 
-    fn traverse(&self) -> () {
-        self.tree.as_ref().unwrap().traverse();
+    fn traverse(&self) -> Result<(), String> {
+        match &self.tree {
+            Some(t) => Ok(t.traverse()),
+            None => Err("Uninitialized Tree".to_string()),
+        }
     }
 
-    fn predict(&self, x: &Data) -> f64 {
-        self.tree.as_ref().unwrap().predict(x)
+    fn predict(&self, x: &Data) -> Result<f64, String> {
+        match &self.tree {
+            Some(t) => Ok(t.predict(x)),
+            None => Err("Uninitialized Tree".to_string()),
+        }
     }
 }
 
@@ -227,20 +262,20 @@ fn main() {
         df.push(record)
     }
     let now = Instant::now();
-    let mut tree = Tree::new(Some(8), Some(500), Some(20));
+    let mut tree = Tree::new(Some(4), Some(400), Some(100));
     tree.fit(&df);
-    tree.traverse();
+    tree.traverse().unwrap();
     println!("{:?}", now.elapsed());
     // println!(
     //     "{}",
     //     tree.predict(&Data::new(vec![-0.508852, 0.633505, 1.511747], 1.440603))
     // );
-    let rss = df
-        .iter()
-        .map(|a| (tree.predict(a) - a.y).powi(2))
-        .sum::<f64>()
-        / df.len() as f64;
-    println!("{rss}");
+    // let rss = df
+    //     .iter()
+    //     .map(|a| (tree.predict(a) - a.y).powi(2))
+    //     .sum::<f64>()
+    //     / df.len() as f64;
+    // println!("{rss}");
     let mut rdr2 = csv::ReaderBuilder::new()
         .flexible(true)
         .from_path("data_2.csv")
@@ -252,10 +287,10 @@ fn main() {
     }
     let rss2 = df2
         .iter()
-        .map(|a| (tree.predict(a) - a.y).powi(2))
+        .map(|a| (tree.predict(a).unwrap() - a.y).powi(2))
         .sum::<f64>()
         / df2.len() as f64;
-    println!("{:?}", df2[5]);
-    println!("{}", tree.predict(&df2[5]));
-    println!("{}", rss2)
+
+    println!("{}", rss2);
+    println!("{:?}", tree.predict(&df2[0]))
 }
