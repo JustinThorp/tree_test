@@ -4,7 +4,7 @@
 //use rand::Rng;
 use std::time::Instant;
 
-use tree_test::{Data, Tree};
+use tree_test::{Data, Metric, Tree};
 
 fn main() {
     let mut rdr = csv::ReaderBuilder::new()
@@ -17,7 +17,7 @@ fn main() {
         df.push(record)
     }
     let now = Instant::now();
-    let mut tree = Tree::new(Some(4), Some(400), Some(100));
+    let mut tree = Tree::new(Some(4), Some(400), Some(100), Some(Metric::MAE));
     tree.fit(&df);
     tree.traverse().unwrap();
     println!("{:?}", now.elapsed());
@@ -48,4 +48,5 @@ fn main() {
 
     println!("{}", rss2);
     println!("{:?}", tree.predict(&df2[0]))
+    //println!("{}", median(&df[0..]))
 }

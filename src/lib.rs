@@ -9,6 +9,37 @@ impl Data {
         Data { y, x }
     }
 }
+#[derive(Debug, Clone, Copy)]
+pub enum Metric {
+    MSE,
+    MAE,
+}
+
+fn quickselect(l: &Vec<f64>, k: usize) -> f64 {
+    if l.len() == 1 {
+        return l[0];
+    }
+    let pivot = l[0];
+    let lows: Vec<f64> = l.into_iter().map(|a| *a).filter(|&a| a < pivot).collect();
+    let highs: Vec<f64> = l.into_iter().map(|a| *a).filter(|&a| a > pivot).collect();
+    let pivots: Vec<f64> = l.into_iter().map(|a| *a).filter(|&a| a == pivot).collect();
+    if k < lows.len() {
+        return quickselect(&lows, k);
+    } else if k < (lows.len() + pivots.len()) {
+        return pivots[0];
+    } else {
+        return quickselect(&highs, k - lows.len() - pivots.len());
+    }
+}
+
+fn median(l: &[&Data]) -> f64 {
+    let vals: Vec<f64> = l.into_iter().map(|a| a.y).collect();
+    if l.len() % 2 == 1 {
+        return quickselect(&vals, l.len() / 2);
+    } else {
+        return 0.5 * quickselect(&vals, l.len() / 2 - 1) + 0.5 * quickselect(&vals, l.len() / 2);
+    }
+}
 
 #[derive(Debug)]
 struct Node {
@@ -22,6 +53,7 @@ struct Node {
     max_depth: usize,
     min_samples_split: usize,
     min_samples_leaf: usize,
+    metric: Metric,
 }
 impl Node {
     fn new(
@@ -32,6 +64,7 @@ impl Node {
         max_depth: usize,
         min_samples_split: usize,
         min_samples_leaf: usize,
+        metric: Metric,
     ) -> Node {
         Node {
             id,
@@ -44,6 +77,7 @@ impl Node {
             max_depth,
             min_samples_split,
             min_samples_leaf,
+            metric,
         }
     }
 
@@ -77,8 +111,14 @@ impl Node {
         self.id = *id;
         //self.depth = Some(depth);
         *id += 1;
-        self.val =
-            Some((df.iter().map(|x| x.y).sum::<f64>() / df.len() as f64) * 1.0 + 0.0 * old_val);
+        self.val = match self.metric {
+            Metric::MSE => {
+                Some((df.iter().map(|x| x.y).sum::<f64>() / df.len() as f64) * 1.0 + 0.0 * old_val)
+            }
+            Metric::MAE => Some(median(df)),
+        };
+        // self.val =
+        //     Some((df.iter().map(|x| x.y).sum::<f64>() / df.len() as f64) * 1.0 + 0.0 * old_val);
         // EXPNOTETNIAL SMOOTING IS HERE THATS WHY THE RESUKTS DONT MATHC
         if df.len() <= self.min_samples_split {
             *leaf_nodes += 1;
@@ -89,7 +129,7 @@ impl Node {
             return;
         }
         let mut opt_score: Option<f64> = None;
-        for i in 0..3 {
+        for i in 0..df[0].x.len() {
             df.sort_by(|a, b| a.x[i].partial_cmp(&b.x[i]).unwrap());
 
             let mut left_sum = 0.0;
@@ -106,9 +146,26 @@ impl Node {
 
                 left_sum_sq += df[j - 1].y.powi(2);
                 right_sum_sq -= df[j - 1].y.powi(2);
-
-                let score = (right_sum_sq - right_sum.powi(2) / right_count)
-                    + (left_sum_sq - left_sum.powi(2) / left_count);
+                // let score = (right_sum_sq - right_sum.powi(2) / right_count)
+                //     + (left_sum_sq - left_sum.powi(2) / left_count);
+                let score: f64 = match self.metric {
+                    Metric::MSE => {
+                        (right_sum_sq - right_sum.powi(2) / right_count)
+                            + (left_sum_sq - left_sum.powi(2) / left_count)
+                    }
+                    Metric::MAE => {
+                        let left_median = median(&df[0..j]);
+                        let right_median = median(&df[j..]);
+                        df[0..j]
+                            .iter()
+                            .map(|a| (a.y - left_median).abs())
+                            .sum::<f64>()
+                            + df[j..]
+                                .iter()
+                                .map(|a| (a.y - right_median).abs())
+                                .sum::<f64>()
+                    }
+                };
 
                 match opt_score {
                     Some(x) => {
@@ -146,6 +203,7 @@ impl Node {
                     self.max_depth,
                     self.min_samples_split,
                     self.min_samples_leaf,
+                    self.metric,
                 )));
                 self.left
                     .as_mut()
@@ -159,6 +217,7 @@ impl Node {
                     self.max_depth,
                     self.min_samples_split,
                     self.min_samples_leaf,
+                    self.metric,
                 )));
                 self.right
                     .as_mut()
@@ -192,6 +251,7 @@ pub struct Tree {
     min_samples_split: usize,
     min_samples_leaf: usize,
     leaf_nodes: usize,
+    metric: Metric,
 }
 
 impl Tree {
@@ -199,6 +259,7 @@ impl Tree {
         max_depth: Option<usize>,
         min_samples_split: Option<usize>,
         min_samples_leaf: Option<usize>,
+        metric: Option<Metric>,
     ) -> Tree {
         Tree {
             tree: None,
@@ -215,6 +276,10 @@ impl Tree {
                 None => 1,
             },
             leaf_nodes: 0,
+            metric: match metric {
+                Some(x) => x,
+                None => Metric::MSE,
+            },
         }
     }
 
@@ -227,6 +292,7 @@ impl Tree {
             self.max_depth,
             self.min_samples_split,
             self.min_samples_leaf,
+            self.metric,
         ));
         let mut id = 0;
         //let depth: usize = 0;
