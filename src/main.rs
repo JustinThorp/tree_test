@@ -4,8 +4,10 @@
 //use rand::Rng;
 use std::time::Instant;
 
-use tree_test::{Data, Metric, Tree};
-
+//use tree_test::linear_reg::LinearReg;
+use tree_test::{
+    linear_reg::LinearReg, Data, DecisionTreeRegressor::DecisionTreeRegressor, Metric,
+};
 fn main() {
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
@@ -16,11 +18,10 @@ fn main() {
         let record: Data = result.unwrap();
         df.push(record)
     }
-    let now = Instant::now();
-    let mut tree = Tree::new(Some(4), Some(400), Some(100), Some(Metric::MAE));
+    let mut tree = DecisionTreeRegressor::new(Some(4), Some(400), Some(100), Some(Metric::MSE));
     tree.fit(&df);
-    tree.traverse().unwrap();
-    println!("{:?}", now.elapsed());
+    //tree.traverse().unwrap();
+    //println!("{:?}", now.elapsed());
     // println!(
     //     "{}",
     //     tree.predict(&Data::new(vec![-0.508852, 0.633505, 1.511747], 1.440603))
@@ -46,7 +47,12 @@ fn main() {
         .sum::<f64>()
         / df2.len() as f64;
 
-    println!("{}", rss2);
-    println!("{:?}", tree.predict(&df2[0]))
+    //println!("{}", rss2);
+    //println!("{:?}", tree.predict(&df2[0]))
     //println!("{}", median(&df[0..]))
+    let mut lr = LinearReg::new();
+    let now = Instant::now();
+    lr.fit(&df);
+    println!("{:?}", lr);
+    println!("{:?}", now.elapsed());
 }
