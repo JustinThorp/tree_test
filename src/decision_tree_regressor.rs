@@ -1,4 +1,4 @@
-use crate::{Data, Metric};
+use crate::{Data, Metric, Model};
 
 fn quickselect(l: &Vec<f64>, k: usize) -> f64 {
     if l.len() == 1 {
@@ -272,8 +272,16 @@ impl DecisionTreeRegressor {
             },
         }
     }
+    pub fn traverse(&self) -> Result<(), String> {
+        match &self.tree {
+            Some(t) => Ok(t.traverse()),
+            None => Err("Uninitialized Tree".to_string()),
+        }
+    }
+}
 
-    pub fn fit(&mut self, df: &Vec<Data>) -> () {
+impl Model for DecisionTreeRegressor {
+    fn fit(&mut self, df: &Vec<Data>) {
         self.tree = Some(Node::new(
             1,
             0,
@@ -294,14 +302,7 @@ impl DecisionTreeRegressor {
             .fit(val, &mut df2, &mut id, &mut self.leaf_nodes);
     }
 
-    pub fn traverse(&self) -> Result<(), String> {
-        match &self.tree {
-            Some(t) => Ok(t.traverse()),
-            None => Err("Uninitialized Tree".to_string()),
-        }
-    }
-
-    pub fn predict(&self, x: &Data) -> Result<f64, String> {
+    fn predict(&self, x: &Data) -> Result<f64, String> {
         match &self.tree {
             Some(t) => Ok(t.predict(x)),
             None => Err("Uninitialized Tree".to_string()),
