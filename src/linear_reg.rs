@@ -50,7 +50,7 @@ impl Model for LinearReg {
                 }
                 Ok(pred)
             }
-            None => Err("Uninitialized Tree".to_string()),
+            None => Err("Uninitialized Model".to_string()),
         }
     }
 }

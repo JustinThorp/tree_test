@@ -28,4 +28,10 @@ fn main() {
     //println!("{:?}", lr);
     println!("Linear Regresion: {}", r2(&df, &lr));
     println!("Decision Tree: {}", r2(&df, &tree));
+    let mut ss = preprocessing::StandardScaler::new();
+    ss.fit(&df);
+    println!("{:?}", &ss.means.as_ref().unwrap());
+    println!("{:?}", &ss.sigma.as_ref().unwrap());
+    println!("{:?}", &df[0]);
+    println!("{:?}", ss.transform(&df[0]).unwrap());
 }

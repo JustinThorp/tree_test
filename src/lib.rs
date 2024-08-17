@@ -1,5 +1,7 @@
 pub mod decision_tree_regressor;
 pub mod linear_reg;
+pub mod preprocessing;
+
 #[derive(serde::Deserialize, Debug)]
 pub struct Data {
     pub y: f64,
