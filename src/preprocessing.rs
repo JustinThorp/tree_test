@@ -1,4 +1,4 @@
-use crate::Data;
+use crate::{Data, DataFrame};
 use itertools::izip;
 
 pub struct StandardScaler {
@@ -14,12 +14,12 @@ impl StandardScaler {
         }
     }
 
-    pub fn fit(&mut self, df: &Vec<Data>) {
+    pub fn fit(&mut self, df: &DataFrame) {
         self.means = Some(Vec::new());
         for _ in 0..df[0].x.len() {
             self.means.as_mut().unwrap().push(0.0);
         }
-        for row in df {
+        for row in df.iter() {
             for i in 0..row.x.len() {
                 self.means.as_mut().unwrap()[i] += row.x[i];
             }
@@ -32,7 +32,7 @@ impl StandardScaler {
         for _ in 0..df[0].x.len() {
             self.sigma.as_mut().unwrap().push(0.0);
         }
-        for row in df {
+        for row in df.iter() {
             for i in 0..row.x.len() {
                 self.sigma.as_mut().unwrap()[i] +=
                     (row.x[i] - self.means.as_ref().unwrap()[i]).powi(2);

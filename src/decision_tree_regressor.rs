@@ -1,4 +1,4 @@
-use crate::{Data, Metric, Model};
+use crate::{Data, DataFrame, Metric, Model};
 
 fn quickselect(l: &Vec<f64>, k: usize) -> f64 {
     if l.len() == 1 {
@@ -281,7 +281,7 @@ impl DecisionTreeRegressor {
 }
 
 impl Model for DecisionTreeRegressor {
-    fn fit(&mut self, df: &Vec<Data>) {
+    fn fit(&mut self, df: &DataFrame) {
         self.tree = Some(Node::new(
             1,
             0,
@@ -294,7 +294,7 @@ impl Model for DecisionTreeRegressor {
         ));
         let mut id = 0;
         //let depth: usize = 0;
-        let mut df2: Vec<&Data> = df.iter().collect();
+        let mut df2: Vec<&Data> = df.iter().map(|x| x).collect();
         let val = df2.iter().map(|x| x.y).sum::<f64>() / df.len() as f64;
         self.tree
             .as_mut()

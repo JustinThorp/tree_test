@@ -1,9 +1,8 @@
-use rand::seq::SliceRandom;
 use std::iter::zip;
 
 #[allow(unused_imports)]
 use crate::Data;
-use crate::Model;
+use crate::{DataFrame, Model};
 #[derive(Debug)]
 pub struct LinearReg {
     coef: Option<Vec<f64>>,
@@ -18,9 +17,8 @@ impl LinearReg {
         }
     }
 }
-
 impl Model for LinearReg {
-    fn fit(&mut self, df: &Vec<Data>) {
+    fn fit(&mut self, df: &DataFrame) {
         //let l: f64 = 0.00001;
         self.coef = Some(Vec::new());
         self.intercept = Some(0.0);

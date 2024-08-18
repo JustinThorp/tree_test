@@ -4,15 +4,20 @@
 use tree_test::*;
 
 fn main() {
-    let mut rdr = csv::ReaderBuilder::new()
-        .flexible(true)
-        .from_path("data.csv")
-        .unwrap();
-    let mut df: Vec<Data> = Vec::new();
-    for result in rdr.deserialize() {
-        let record: Data = result.unwrap();
-        df.push(record)
-    }
+    //let mut rdr = csv::ReaderBuilder::new()
+    //    .flexible(true)
+    //    .from_path("data.csv")
+    //    .unwrap();
+    //let mut df: Vec<Data> = Vec::new();
+    //for result in rdr.deserialize() {
+    //    let record: Data = result.unwrap();
+    //    df.push(record)
+    //}
+    //let mut temp: Vec<Data> = Vec::new();
+    let df = DataFrame::from_csv("data.csv").unwrap();
+    //println!("{:?}", df2);
+    //let temp: Vec<f64> = df2.iter().map(|x| x.y).collect();
+    //println!("{:?}", temp);
     let mut tree = decision_tree_regressor::DecisionTreeRegressor::new(
         Some(4000),
         Some(2),
